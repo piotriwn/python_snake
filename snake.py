@@ -36,7 +36,7 @@ font.FontWeight = 8
 font.FaceName = "Terminal"
 
 handle = ctypes.windll.kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
-rect = wintypes.SMALL_RECT(0, 0, 50, 50) # (left, top, right, bottom)
+rect = wintypes.SMALL_RECT(0, 0, 30, 30) # (left, top, right, bottom)
 ctypes.windll.kernel32.SetConsoleWindowInfo(handle, True, ctypes.byref(rect))
 ctypes.windll.kernel32.SetCurrentConsoleFontEx(
         handle, ctypes.c_long(False), ctypes.pointer(font))
@@ -64,14 +64,9 @@ class Menu:
             else:
                 screen.addstr(y, x, row)
 
-class ResumeMenu:
-    def __init__(self, resumeMenuItems, height, width):
-        self.currentPosition = 0
-        self.items = resumeMenuItems
-        self.height = height
-        self.width = width
 
-    def print_resume_menu(self, screen):
+class ResumeMenu(Menu):
+    def print_menu(self, screen):
         for rowIndex, row in enumerate(self.items):
             x = int(self.width/2) - int(len(row)/2)
             y = int(0.6*self.height)  + rowIndex
@@ -81,7 +76,21 @@ class ResumeMenu:
                 screen.attroff(curses.color_pair(1))
             else:
                 screen.addstr(y, x, row)
- 
+                
+class GameOverMessage:
+    def __init__(self, message, height, width, colorPair, rowNumber):
+         self.message = message
+         self.height = height
+         self.width = width
+         self.colorPair = colorPair
+         self.rowNumber = rowNumber
+         self.messageX = int(self.width/2) - int(len(self.message)/2)
+         self.messageY = int(0.6*self.height) + self.rowNumber
+
+    def print_message(self, screen):
+        screen.attron(curses.color_pair(self.colorPair))
+        screen.addstr(self.messageY, self.messageX, self.message)
+        screen.attroff(curses.color_pair(self.colorPair))
         
 class Board:
     def __init__ (self, height, width):
@@ -142,17 +151,17 @@ class Snake:
             elif self.direction == None:
                 pass
         else:
-            if keyInput == curses.KEY_DOWN:
+            if keyInput == curses.KEY_DOWN and self.direction != "Up":
                 # move head one tile down and n-1 segments goes to n-th segment
                 self.direction = "Down"
                 self.move_down()
-            elif keyInput == curses.KEY_UP:
+            elif keyInput == curses.KEY_UP and self.direction != "Down":
                 self.direction = "Up"
                 self.move_up()
-            elif keyInput == curses.KEY_LEFT:
+            elif keyInput == curses.KEY_LEFT and self.direction != "Right":
                 self.direction = "Left"
                 self.move_left()
-            elif keyInput == curses.KEY_RIGHT:
+            elif keyInput == curses.KEY_RIGHT and self.direction != "Left":
                 self.direction = "Right"
                 self.move_right()
 
@@ -184,6 +193,18 @@ class Snake:
         self.length += 1
         self.segments = [[applePosY, applePosX]] + self.segments
 
+    def check_if_ate_tail(self):
+        for segment in self.segments[2:]:
+            if self.segments[0] == segment:
+                return True # True = ate tail
+        return False
+    
+    def check_if_hit_wall(self, lowerBorder, upperBorder, leftBorder, rightBorder):
+        if self.segments[0][0] >= lowerBorder or self.segments[0][0] <= upperBorder or self.segments[0][1] >= rightBorder or self.segments[0][1] <= leftBorder:
+            return True
+        else:
+            return False
+
         
         
         
@@ -205,6 +226,9 @@ def main(stdscr):
     # blue-blue pair for drawing boundaries
     curses.init_pair(4, curses.COLOR_BLUE, curses.COLOR_BLUE)
 
+    # white-red pair for displaying "ate tail" message
+    curses.init_pair(5, curses.COLOR_WHITE, curses.COLOR_RED)
+
 
     # get window size
     h, w = stdscr.getmaxyx()
@@ -214,14 +238,18 @@ def main(stdscr):
 
 
 
-    menu.print_menu(stdscr)
+
 
     running = True
     while running:
+        stdscr.erase()
+        menu.print_menu(stdscr)
+        stdscr.refresh()
+
         # get character
         keyPressed = stdscr.getch()
 
-        stdscr.erase()
+        
 
         if keyPressed == curses.KEY_UP and menu.currentPosition > 0:
             menu.currentPosition -= 1
@@ -257,7 +285,33 @@ def main(stdscr):
                     if snake.segments[0] == apple:
                         snake.eat_apple(apple[0], apple[1])
                         apple = board.get_apple_position()
-                                    
+
+                    if snake.check_if_ate_tail(): # if ate tail 
+                        ateTailRunning = True
+                        snakeAteMessage = GameOverMessage("Snake ate its tail!", h,w,5,0)
+                        enterContinueMessage = GameOverMessage("Press ENTER to continue...", h, w, 1,1)
+                        while ateTailRunning:
+                            snakeAteMessage.print_message(stdscr)
+                            enterContinueMessage.print_message(stdscr)
+                            keyPressed = stdscr.getch()
+                            if keyPressed == curses.KEY_ENTER or keyPressed in [10,13]:
+                                ateTailRunning = False
+                                gameLoop = False 
+                            stdscr.refresh()
+
+                    if snake.check_if_hit_wall(board.lowerBorder, board.upperBorder, board.leftBorder, board.rightBorder): # if hit wall
+                        hitWallRunning = True
+                        snakeHitMessage = GameOverMessage("Snake hit the wall!", h, w, 5, 0)
+                        enterContinueMessage = GameOverMessage("Press ENTER to continue...", h, w, 1,1)
+                        while hitWallRunning:
+                            snakeHitMessage.print_message(stdscr)
+                            enterContinueMessage.print_message(stdscr)
+                            keyPressed = stdscr.getch()
+                            if keyPressed == curses.KEY_ENTER or keyPressed in [10,13]:
+                                hitWallRunning = False
+                                gameLoop = False 
+                            stdscr.refresh()
+                        
 
                     startTime = time.process_time()
                     curses.halfdelay(1)
@@ -290,13 +344,13 @@ def main(stdscr):
                                     resumeMenuRunning = False
                             else: # no more than 3 options
                                 pass
-                            resumeMenu.print_resume_menu(stdscr)
+                            resumeMenu.print_menu(stdscr)
                             stdscr.refresh()
                             
-
+                    
                     snake.establish_direction(keyPressed)
 
-                    # flush inp buffer
+                    # flush input buffer
                     curses.flushinp()
 
                     stdscr.erase()
@@ -311,15 +365,14 @@ def main(stdscr):
                 # stdscr.getch()
                 # stdscr.clear()
             elif menu.currentPosition == 1: # pressed Scoreboard
-                stdscr.erase()
+                stdscr.clear()
                 stdscr.addstr(0, 0, f"You pressed {menu.items[menu.currentPosition]}")
                 stdscr.getch()
-                stdscr.erase()
+                stdscr.clear()
             else: # there is no more than 3 options YET
                 pass
 
-        menu.print_menu(stdscr)
-        stdscr.refresh()
+        #stdscr.refresh()
     
 
 curses.wrapper(main)
