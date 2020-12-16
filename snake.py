@@ -28,11 +28,16 @@ class CONSOLE_FONT_INFOEX(ctypes.Structure):
 
 font = CONSOLE_FONT_INFOEX()
 font.cbSize = ctypes.sizeof(CONSOLE_FONT_INFOEX)
+# font.nFont = 8
+# font.dwFontSize.X = 8
+# font.dwFontSize.Y = 8
+# font.FontFamily = 8
+# font.FontWeight = 8
 font.nFont = 8
-font.dwFontSize.X = 8
-font.dwFontSize.Y = 8
+font.dwFontSize.X = 16
+font.dwFontSize.Y = 16
 font.FontFamily = 8
-font.FontWeight = 8
+font.FontWeight = 1
 font.FaceName = "Terminal"
 
 handle = ctypes.windll.kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
@@ -117,7 +122,6 @@ class Scoreboard:
                 screen.addstr(y, x,scoreEntry)
 
 
-
 class Board:
     def __init__ (self, height, width):
         self.height = height
@@ -139,6 +143,12 @@ class Board:
             screen.addstr(j, self.rightBorder, "|")
             screen.attroff(curses.color_pair(4))
         screen.refresh()
+
+    def draw_current_score(self, screen, currentScore):
+        screen.attron(curses.color_pair(1))
+        msg = "Score: " + str(currentScore)
+        screen.addstr(0, 0, msg)
+        screen.attroff(curses.color_pair(1))
 
     def get_apple_position(self):
         applePosX = random.randint(self.leftBorder+1, self.rightBorder-1) 
@@ -192,28 +202,25 @@ class Snake:
                 self.direction = "Right"
                 self.move_right()
 
-    def move_down(self):
+    def segments_follow(self):
         for i in range(len(self.segments)-1, 0, -1):
             self.segments[i][0] = self.segments[i-1][0]
             self.segments[i][1] = self.segments[i-1][1]
+
+    def move_down(self):
+        self.segments_follow()
         self.segments[0][0] += 1
 
     def move_up(self):
-        for i in range(len(self.segments)-1, 0, -1):
-            self.segments[i][0] = self.segments[i-1][0]
-            self.segments[i][1] = self.segments[i-1][1]
+        self.segments_follow()  
         self.segments[0][0] -= 1
 
     def move_left(self):
-        for i in range(len(self.segments)-1, 0, -1):
-            self.segments[i][0] = self.segments[i-1][0]
-            self.segments[i][1] = self.segments[i-1][1]
+        self.segments_follow()
         self.segments[0][1] -= 1
 
     def move_right(self):
-        for i in range(len(self.segments)-1, 0, -1):
-            self.segments[i][0] = self.segments[i-1][0]
-            self.segments[i][1] = self.segments[i-1][1]
+        self.segments_follow()
         self.segments[0][1] += 1
 
     def eat_apple(self, applePosY, applePosX):
@@ -232,10 +239,12 @@ class Snake:
             return True
         else:
             return False
-
-        
-        
-        
+    
+    def check_if_apple_in_snake(self, applePosY, applePosX):
+        for segment in self.segments:
+            if segment == [applePosY, applePosX]:
+                return True
+        return False
 
 
 def main(stdscr):
@@ -276,10 +285,6 @@ def main(stdscr):
         # get character
         keyPressed = stdscr.getch()
 
-
-
-        
-
         if keyPressed == curses.KEY_UP and menu.currentPosition > 0:
             menu.currentPosition -= 1
         elif keyPressed == curses.KEY_DOWN and menu.currentPosition < len(menu.items) - 1:
@@ -291,14 +296,16 @@ def main(stdscr):
                 # create a board instance
                 board = Board(h, w)
 
-                snakeInitialY = random.randint(int(0.1*h), int(0.9*h))
-                snakeInitialX = random.randint(int(0.1*w), int(0.9*w))
+                snakeInitialY = random.randint(board.upperBorder + 1, board.lowerBorder - 1)
+                snakeInitialX = random.randint(board.leftBorder + 1, board.rightBorder - 1)
 
                 # create a snake instance
                 snake = Snake(snakeInitialY, snakeInitialX)
 
                 # create an apple:
                 apple = board.get_apple_position() # list [appleY, appleX]
+                while snake.check_if_apple_in_snake(apple[0], apple[1]):
+                    apple = board.get_apple_position() # list [appleY, appleX]
 
                 # draw an apple:
                 board.draw_apple(apple[0], apple[1], stdscr)
@@ -314,6 +321,8 @@ def main(stdscr):
                     if snake.segments[0] == apple:
                         snake.eat_apple(apple[0], apple[1])
                         apple = board.get_apple_position()
+                        while snake.check_if_apple_in_snake(apple[0], apple[1]):
+                            apple = board.get_apple_position() # list [appleY, appleX]
 
                     if snake.check_if_ate_tail(): # if ate tail 
                         ateTailRunning = True
@@ -349,7 +358,6 @@ def main(stdscr):
                                 gameLoop = False 
                             stdscr.refresh()
                         
-
                     startTime = time.process_time()
                     curses.halfdelay(1)
                     keyPressed = stdscr.getch()
@@ -393,15 +401,11 @@ def main(stdscr):
 
                     stdscr.erase()
                     board.draw_borders(stdscr)
+                    board.draw_current_score(stdscr, snake.score)
                     board.draw_apple(apple[0], apple[1], stdscr)
                     snake.draw_snake(stdscr)
                     stdscr.refresh()
 
-                # board.draw_borders(stdscr)
-                # snake.draw_snake(stdscr)
-
-                # stdscr.getch()
-                # stdscr.clear()
             elif menu.currentPosition == 1: # pressed Scoreboard
                 stdscr.clear()
                 scoreboard.display_scoreboard(stdscr)
@@ -412,10 +416,7 @@ def main(stdscr):
                         scoreboardMenuRunning =False
             else: # there is no more than 3 options YET
                 pass
-
-        #stdscr.refresh()
     
-
 curses.wrapper(main)
 
 # NOTE
