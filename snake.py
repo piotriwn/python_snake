@@ -91,7 +91,33 @@ class GameOverMessage:
         screen.attron(curses.color_pair(self.colorPair))
         screen.addstr(self.messageY, self.messageX, self.message)
         screen.attroff(curses.color_pair(self.colorPair))
-        
+
+class Scoreboard:
+    def __init__(self, height, width):
+        self.scoreList = []
+        self.height = height
+        self.width = width
+
+    def display_scoreboard(self, screen):
+        if len(self.scoreList) == 0:
+            msg = "No scores yet!"
+            screen.addstr(int(0.1*self.height), int(self.width/2) - int(len(msg)/2), msg)
+        else:
+            self.sortedList = sorted(self.scoreList, reverse=True)
+            x = int(self.width/2) - int(len("SCORES")/2)
+            y = int(0.1*self.height)
+            screen.attron(curses.color_pair(5))
+            screen.addstr(y, x, "SCORES")
+            screen.attroff(curses.color_pair(5))
+            y += 1
+            for rowIndex, row in enumerate(self.sortedList):
+                scoreEntry = str(rowIndex+1) + ". " + str(row)
+                x = int(self.width/2) - 3
+                y += 1
+                screen.addstr(y, x,scoreEntry)
+
+
+
 class Board:
     def __init__ (self, height, width):
         self.height = height
@@ -131,6 +157,7 @@ class Snake:
         self.length = 1
         self.segments = [[initialY, initialX]]
         self.direction = None
+        self.score = 0
         
     def draw_snake(self, screen):
         for i in self.segments:
@@ -190,6 +217,7 @@ class Snake:
         self.segments[0][1] += 1
 
     def eat_apple(self, applePosY, applePosX):
+        self.score += 1
         self.length += 1
         self.segments = [[applePosY, applePosX]] + self.segments
 
@@ -236,9 +264,8 @@ def main(stdscr):
     # create an instance "menu" of a class "Menu"
     menu = Menu(MENU_ITEMS, h, w)
 
-
-
-
+    # create a scoreboard instance
+    scoreboard = Scoreboard(h, w)
 
     running = True
     while running:
@@ -248,6 +275,8 @@ def main(stdscr):
 
         # get character
         keyPressed = stdscr.getch()
+
+
 
         
 
@@ -288,10 +317,14 @@ def main(stdscr):
 
                     if snake.check_if_ate_tail(): # if ate tail 
                         ateTailRunning = True
+                        scoreboard.scoreList.append(snake.score)
                         snakeAteMessage = GameOverMessage("Snake ate its tail!", h,w,5,0)
-                        enterContinueMessage = GameOverMessage("Press ENTER to continue...", h, w, 1,1)
+                        scoreMessageText = "You scored " + str(snake.score) + " points!"
+                        scoreMessage = GameOverMessage(scoreMessageText, h, w, 1, 1)
+                        enterContinueMessage = GameOverMessage("Press ENTER to continue...", h, w, 1,2)
                         while ateTailRunning:
                             snakeAteMessage.print_message(stdscr)
+                            scoreMessage.print_message(stdscr)
                             enterContinueMessage.print_message(stdscr)
                             keyPressed = stdscr.getch()
                             if keyPressed == curses.KEY_ENTER or keyPressed in [10,13]:
@@ -301,10 +334,14 @@ def main(stdscr):
 
                     if snake.check_if_hit_wall(board.lowerBorder, board.upperBorder, board.leftBorder, board.rightBorder): # if hit wall
                         hitWallRunning = True
+                        scoreboard.scoreList.append(snake.score)
                         snakeHitMessage = GameOverMessage("Snake hit the wall!", h, w, 5, 0)
-                        enterContinueMessage = GameOverMessage("Press ENTER to continue...", h, w, 1,1)
+                        scoreMessageText = "You scored " + str(snake.score) + " points!"
+                        scoreMessage = GameOverMessage(scoreMessageText, h, w, 1, 1)
+                        enterContinueMessage = GameOverMessage("Press ENTER to continue...", h, w, 1,2)
                         while hitWallRunning:
                             snakeHitMessage.print_message(stdscr)
+                            scoreMessage.print_message(stdscr)
                             enterContinueMessage.print_message(stdscr)
                             keyPressed = stdscr.getch()
                             if keyPressed == curses.KEY_ENTER or keyPressed in [10,13]:
@@ -338,6 +375,7 @@ def main(stdscr):
                                     gameLoop = False
                                     running = False
                                 elif resumeMenu.currentPosition == 1: # user pressed exit to main menu
+                                    scoreboard.scoreList.append(snake.score)
                                     resumeMenuRunning = False
                                     gameLoop = False
                                 elif resumeMenu.currentPosition == 0: # user pressed resume
@@ -366,9 +404,12 @@ def main(stdscr):
                 # stdscr.clear()
             elif menu.currentPosition == 1: # pressed Scoreboard
                 stdscr.clear()
-                stdscr.addstr(0, 0, f"You pressed {menu.items[menu.currentPosition]}")
-                stdscr.getch()
-                stdscr.clear()
+                scoreboard.display_scoreboard(stdscr)
+                scoreboardMenuRunning = True
+                while scoreboardMenuRunning:
+                    keyPressed = stdscr.getch()
+                    if keyPressed == curses.KEY_ENTER or keyPressed in [10,13]:
+                        scoreboardMenuRunning =False
             else: # there is no more than 3 options YET
                 pass
 
