@@ -5,11 +5,12 @@ import ctypes
 from ctypes import wintypes
 
 MENU_ITEMS = ["Play", "Scoreboard", "Exit"]
+RESUME_MENU_ITEMS = ["Resume", "Exit to main menu", "Exit game"]
 BOARD_BORDERS = {"topPadding" : 3, "margins" : 1}
 
 
 # ------------------------------------------------------------------
-# modify CMD character font and window size - no idea how this works
+# modify CMD character font and window size
 
 LF_FACESIZE = 32
 STD_OUTPUT_HANDLE = -11
@@ -53,7 +54,6 @@ class Menu:
     # screen is a stdscr argument
     # height, width is screen size
     def print_menu(self, screen):
-        screen.erase()
         for rowIndex, row in enumerate(self.items):
             x = int(self.width/2) - int(len(row)/2)
             y = int(self.height/2)  + rowIndex
@@ -64,8 +64,23 @@ class Menu:
             else:
                 screen.addstr(y, x, row)
 
-        screen.refresh()
+class ResumeMenu:
+    def __init__(self, resumeMenuItems, height, width):
+        self.currentPosition = 0
+        self.items = resumeMenuItems
+        self.height = height
+        self.width = width
 
+    def print_resume_menu(self, screen):
+        for rowIndex, row in enumerate(self.items):
+            x = int(self.width/2) - int(len(row)/2)
+            y = int(0.6*self.height)  + rowIndex
+            if rowIndex == self.currentPosition:
+                screen.attron(curses.color_pair(1))
+                screen.addstr(y, x, row)
+                screen.attroff(curses.color_pair(1))
+            else:
+                screen.addstr(y, x, row)
  
         
 class Board:
@@ -140,9 +155,6 @@ class Snake:
             elif keyInput == curses.KEY_RIGHT:
                 self.direction = "Right"
                 self.move_right()
-            elif keyInput in [27, 113]:
-                pass
-                # show menu
 
     def move_down(self):
         for i in range(len(self.segments)-1, 0, -1):
@@ -234,9 +246,12 @@ def main(stdscr):
                 # draw an apple:
                 board.draw_apple(apple[0], apple[1], stdscr)
 
+                # create resume menu instance
+                resumeMenu = ResumeMenu(RESUME_MENU_ITEMS, h, w)
+
                 gameLoop = True
                 while gameLoop:
-                
+
                     # check if apple eaten
                     # if eaten
                     if snake.segments[0] == apple:
@@ -251,8 +266,33 @@ def main(stdscr):
                     duration = int(1000 * round((finishTime-startTime), 4))
 
 
-                    if keyPressed != curses.ERR:
+                    if keyPressed != curses.ERR: # if ~ no input ready (so: input ready)
                         curses.napms(100 - duration)
+
+                    if keyPressed in [27, 113]:
+                        resumeMenu.currentPosition = 0
+                        resumeMenuRunning = True
+                        while resumeMenuRunning:
+                            keyPressed = stdscr.getch()
+                            if keyPressed == curses.KEY_UP and resumeMenu.currentPosition > 0:
+                                resumeMenu.currentPosition -= 1
+                            elif keyPressed == curses.KEY_DOWN and resumeMenu.currentPosition < len(resumeMenu.items) - 1:
+                                resumeMenu.currentPosition += 1
+                            elif keyPressed == curses.KEY_ENTER or keyPressed in [10,13]: # taken from ASCII
+                                if resumeMenu.currentPosition == len(menu.items) - 1: #user pressed exit game
+                                    resumeMenuRunning = False
+                                    gameLoop = False
+                                    running = False
+                                elif resumeMenu.currentPosition == 1: # user pressed exit to main menu
+                                    resumeMenuRunning = False
+                                    gameLoop = False
+                                elif resumeMenu.currentPosition == 0: # user pressed resume
+                                    resumeMenuRunning = False
+                            else: # no more than 3 options
+                                pass
+                            resumeMenu.print_resume_menu(stdscr)
+                            stdscr.refresh()
+                            
 
                     snake.establish_direction(keyPressed)
 
